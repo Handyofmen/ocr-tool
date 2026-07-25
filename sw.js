@@ -6,8 +6,8 @@
 //    engine + chosen language model (~2-15MB depending on language); every
 //    use after that works fully offline, including on airplane mode.
 
-const SHELL_CACHE = 'ocr-tool-shell-v1';
-const RUNTIME_CACHE = 'ocr-tool-runtime-v1';
+const SHELL_CACHE = 'ocr-tool-shell-v2';
+const RUNTIME_CACHE = 'ocr-tool-runtime-v2';
 
 const SHELL_FILES = [
   './ocr-tool.html',
@@ -45,18 +45,18 @@ self.addEventListener('fetch', event => {
   const isSameOrigin = url.origin === self.location.origin;
 
   if (isSameOrigin) {
-    // App shell: cache-first, network fallback, then update cache.
+    // App shell: NETWORK-FIRST. Always prefer the live page when online so
+    // a stale or broken cached version (e.g. from an earlier deploy) can
+    // never get "stuck" — it self-heals the moment the network is available.
+    // Falls back to cache only when there's genuinely no connection.
     event.respondWith(
-      caches.match(req).then(cached => {
-        const fetchPromise = fetch(req).then(networkResp => {
-          if (networkResp && networkResp.status === 200) {
-            const clone = networkResp.clone();
-            caches.open(SHELL_CACHE).then(cache => cache.put(req, clone));
-          }
-          return networkResp;
-        }).catch(() => cached);
-        return cached || fetchPromise;
-      })
+      fetch(req).then(networkResp => {
+        if (networkResp && networkResp.status === 200) {
+          const clone = networkResp.clone();
+          caches.open(SHELL_CACHE).then(cache => cache.put(req, clone));
+        }
+        return networkResp;
+      }).catch(() => caches.match(req))
     );
   } else {
     // Cross-origin (CDN): runtime cache-first so the OCR engine, pdf.js,
