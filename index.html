@@ -87,6 +87,18 @@
   .drop-zone-visual h3 { font-size: 1.1rem; font-weight: 600; }
   .drop-zone-visual p { color: var(--text-secondary); font-size: 0.85rem; }
   .drop-zone-visual .tap-hint { color: var(--accent); font-size: 0.8rem; font-weight: 500; margin-top: 4px; }
+  .update-banner {
+    display: none; align-items: center; justify-content: space-between; gap: 12px;
+    background: rgba(99, 102, 241, 0.15); border: 1px solid var(--accent);
+    border-radius: 12px; padding: 12px 16px; margin-bottom: 16px;
+    font-size: 0.85rem; flex-wrap: wrap;
+  }
+  .update-banner.visible { display: flex; }
+  .update-banner .update-text { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .update-banner button {
+    background: var(--accent); color: white; border: none; border-radius: 8px;
+    padding: 8px 16px; font-size: 0.8rem; font-weight: 700; cursor: pointer;
+  }
   .capture-row { display: flex; gap: 10px; margin-bottom: 12px; }
   .capture-row .btn { flex: 1; padding: 16px 12px; font-size: 0.95rem; }
   .hw-toolbar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; justify-content: center; }
@@ -271,6 +283,11 @@
         <span>🕘</span> History
       </button>
     </div>
+  </div>
+
+  <div class="update-banner" id="updateBanner">
+    <span class="update-text">🔄 A new version of this tool is ready</span>
+    <button id="updateRefreshBtn">Refresh Now</button>
   </div>
 
   <div class="settings-row">
@@ -504,6 +521,8 @@
   const hwNextBtn = document.getElementById('hwNextBtn');
   const hwDownloadPngBtn = document.getElementById('hwDownloadPngBtn');
   const hwDownloadPdfBtn = document.getElementById('hwDownloadPdfBtn');
+  const updateBanner = document.getElementById('updateBanner');
+  const updateRefreshBtn = document.getElementById('updateRefreshBtn');
 
   // ---- State ----
   let fileQueue = [];      // { id, file }
@@ -653,10 +672,27 @@
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js')
-        .then(() => console.log('Service worker registered — offline mode enabled after first full load.'))
+        .then(reg => {
+          console.log('Service worker registered — offline mode enabled after first full load.');
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            if (!newWorker) return;
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                updateBanner.classList.add('visible');
+              }
+            });
+          });
+          reg.update().catch(() => {});
+          setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') reg.update().catch(() => {});
+          });
+        })
         .catch(err => console.warn('Service worker registration failed:', err));
     });
   }
+  updateRefreshBtn.addEventListener('click', () => window.location.reload());
   let deferredInstallPrompt = null;
   window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
