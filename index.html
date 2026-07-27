@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="OCR Tool">
 <link rel="apple-touch-icon" href="./icon-192.png">
 <link rel="icon" href="./icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs" type="module"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
@@ -86,6 +87,15 @@
   .drop-zone-visual h3 { font-size: 1.1rem; font-weight: 600; }
   .drop-zone-visual p { color: var(--text-secondary); font-size: 0.85rem; }
   .drop-zone-visual .tap-hint { color: var(--accent); font-size: 0.8rem; font-weight: 500; margin-top: 4px; }
+  .capture-row { display: flex; gap: 10px; margin-bottom: 12px; }
+  .capture-row .btn { flex: 1; padding: 16px 12px; font-size: 0.95rem; }
+  .hw-toolbar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; justify-content: center; }
+  .hw-toolbar label { color: var(--text-secondary); font-size: 0.8rem; display: flex; align-items: center; gap: 6px; }
+  .hw-toolbar select, .hw-toolbar input[type=range] { accent-color: var(--accent); }
+  .hw-page-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 10px; font-size: 0.85rem; color: var(--text-secondary); }
+  .hw-page-nav button { background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary); border-radius: 8px; padding: 6px 14px; cursor: pointer; }
+  .hw-canvas-wrap { text-align: center; overflow-x: auto; background: #0a0f1a; border-radius: 12px; padding: 10px; }
+  .hw-canvas-wrap canvas { max-width: 100%; border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
   .queue-summary {
     display: none; justify-content: space-between; align-items: center;
     padding: 10px 16px; background: rgba(99, 102, 241, 0.1);
@@ -288,11 +298,17 @@
     </label>
   </div>
 
+  <div class="capture-row">
+    <button class="btn btn-secondary" id="takePhotoBtn"><span>📷</span> Take Photo</button>
+    <button class="btn btn-secondary" id="chooseFilesBtn"><span>🖼️</span> Choose Files</button>
+  </div>
+  <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;" />
+
   <div class="upload-area" id="uploadArea">
     <input type="file" id="fileInput" class="file-input-native" accept="image/*,.pdf" multiple />
     <div class="drop-zone-visual" id="dropZoneVisual">
       <div class="icon">📤</div>
-      <h3>Click or tap to upload</h3>
+      <h3>Or drop files here</h3>
       <p>Drop files here, or tap to browse — images & PDFs, multiple files supported</p>
       <div class="tap-hint">👆 Tap anywhere in this box</div>
     </div>
@@ -355,6 +371,7 @@
       <button class="btn btn-secondary" id="downloadTxtBtn"><span>💾</span> .txt</button>
       <button class="btn btn-secondary" id="downloadDocBtn"><span>📄</span> Word (.doc)</button>
       <button class="btn btn-secondary" id="downloadPdfBtn"><span>🧾</span> Searchable PDF</button>
+      <button class="btn btn-secondary" id="handwriteBtn"><span>✍️</span> Handwritten Note</button>
     </div>
   </div>
 </div>
@@ -378,6 +395,44 @@
       <button class="btn btn-danger" id="clearHistoryBtn" style="padding:8px 14px; font-size:0.78rem; min-height:auto;">Clear all history</button>
     </div>
     <div id="historyList"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="hwModal">
+  <div class="modal-box" style="max-width:620px;">
+    <div class="modal-close-row">
+      <h2>✍️ Handwritten Note</h2>
+      <button id="hwCloseBtn">✕</button>
+    </div>
+    <div class="modal-sub">Turns your extracted text into a natural-looking handwritten page.</div>
+    <div class="hw-toolbar">
+      <label>Ink:
+        <select id="hwInkColor">
+          <option value="#1e3a5f">Blue-black</option>
+          <option value="#0b0b0b">Black</option>
+          <option value="#0b3d0b">Green</option>
+        </select>
+      </label>
+      <label>Paper:
+        <select id="hwPaperStyle">
+          <option value="ruled">Ruled</option>
+          <option value="plain">Plain</option>
+          <option value="grid">Grid</option>
+        </select>
+      </label>
+    </div>
+    <div class="hw-canvas-wrap">
+      <canvas id="hwCanvas"></canvas>
+    </div>
+    <div class="hw-page-nav" id="hwPageNav" style="display:none;">
+      <button id="hwPrevBtn">‹ Prev</button>
+      <span id="hwPageLabel"></span>
+      <button id="hwNextBtn">Next ›</button>
+    </div>
+    <div class="actions" style="margin-top:16px;">
+      <button class="btn btn-secondary" id="hwDownloadPngBtn"><span>🖼️</span> Download This Page (PNG)</button>
+      <button class="btn btn-secondary" id="hwDownloadPdfBtn"><span>🧾</span> Download All Pages (PDF)</button>
+    </div>
   </div>
 </div>
 
@@ -434,6 +489,21 @@
   const viewHighlightBtn = document.getElementById('viewHighlightBtn');
   const confidenceLegend = document.getElementById('confidenceLegend');
   const highlightView = document.getElementById('highlightView');
+  const takePhotoBtn = document.getElementById('takePhotoBtn');
+  const chooseFilesBtn = document.getElementById('chooseFilesBtn');
+  const cameraInput = document.getElementById('cameraInput');
+  const handwriteBtn = document.getElementById('handwriteBtn');
+  const hwModal = document.getElementById('hwModal');
+  const hwCloseBtn = document.getElementById('hwCloseBtn');
+  const hwCanvas = document.getElementById('hwCanvas');
+  const hwInkColor = document.getElementById('hwInkColor');
+  const hwPaperStyle = document.getElementById('hwPaperStyle');
+  const hwPageNav = document.getElementById('hwPageNav');
+  const hwPageLabel = document.getElementById('hwPageLabel');
+  const hwPrevBtn = document.getElementById('hwPrevBtn');
+  const hwNextBtn = document.getElementById('hwNextBtn');
+  const hwDownloadPngBtn = document.getElementById('hwDownloadPngBtn');
+  const hwDownloadPdfBtn = document.getElementById('hwDownloadPdfBtn');
 
   // ---- State ----
   let fileQueue = [];      // { id, file }
@@ -728,6 +798,12 @@
   }
   fileInput.addEventListener('change', e => {
     if (e.target.files && e.target.files.length) handleFiles(e.target.files);
+  });
+  chooseFilesBtn.addEventListener('click', () => fileInput.click());
+  takePhotoBtn.addEventListener('click', () => cameraInput.click());
+  cameraInput.addEventListener('change', e => {
+    if (e.target.files && e.target.files.length) handleFiles(e.target.files);
+    cameraInput.value = '';
   });
   uploadArea.addEventListener('dragover', e => {
     e.preventDefault();
@@ -1048,6 +1124,185 @@
       showToast('Searchable PDF downloaded!');
     } catch (err) {
       showError('Building the searchable PDF failed.', err);
+    }
+  });
+
+  // =========================================================
+  // Text-to-handwriting renderer
+  // =========================================================
+  const HW_PAGE_W = 850;
+  const HW_PAGE_H = 1100;
+  const HW_MARGIN_LEFT = 90;
+  const HW_MARGIN_RIGHT = 60;
+  const HW_MARGIN_TOP = 80;
+  const HW_MARGIN_BOTTOM = 70;
+  const HW_LINE_HEIGHT = 42;
+  const HW_FONT_SIZE = 30;
+
+  let hwState = { pages: [], currentPage: 0 };
+
+  function wrapParagraphToLines(ctx, paragraph, maxWidth) {
+    if (!paragraph.trim()) return [''];
+    const words = paragraph.split(/\s+/);
+    const lines = [];
+    let current = '';
+    for (const word of words) {
+      const test = current ? current + ' ' + word : word;
+      if (ctx.measureText(test).width > maxWidth && current) {
+        lines.push(current);
+        current = word;
+      } else {
+        current = test;
+      }
+    }
+    if (current) lines.push(current);
+    return lines;
+  }
+
+  function drawPaperBackground(ctx, style, w, h) {
+    ctx.fillStyle = '#fdfbf1';
+    ctx.fillRect(0, 0, w, h);
+    if (style === 'ruled' || style === 'grid') {
+      ctx.strokeStyle = 'rgba(70,110,180,0.35)';
+      ctx.lineWidth = 1;
+      for (let y = HW_MARGIN_TOP; y < h - HW_MARGIN_BOTTOM + HW_LINE_HEIGHT; y += HW_LINE_HEIGHT) {
+        ctx.beginPath();
+        ctx.moveTo(30, y);
+        ctx.lineTo(w - 20, y);
+        ctx.stroke();
+      }
+    }
+    if (style === 'grid') {
+      ctx.strokeStyle = 'rgba(70,110,180,0.18)';
+      for (let x = 30; x < w - 20; x += HW_LINE_HEIGHT) {
+        ctx.beginPath();
+        ctx.moveTo(x, HW_MARGIN_TOP - HW_LINE_HEIGHT);
+        ctx.lineTo(x, h - HW_MARGIN_BOTTOM);
+        ctx.stroke();
+      }
+    }
+    if (style === 'ruled' || style === 'grid') {
+      ctx.strokeStyle = 'rgba(200,60,60,0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(HW_MARGIN_LEFT - 20, 20);
+      ctx.lineTo(HW_MARGIN_LEFT - 20, h - 20);
+      ctx.stroke();
+    }
+  }
+
+  function generateHandwrittenPages(text, inkColor, paperStyle) {
+    const measureCanvas = document.createElement('canvas');
+    const mctx = measureCanvas.getContext('2d');
+    mctx.font = `${HW_FONT_SIZE}px 'Caveat', cursive`;
+    const maxWidth = HW_PAGE_W - HW_MARGIN_LEFT - HW_MARGIN_RIGHT;
+
+    const paragraphs = text.split('\n');
+    let allLines = [];
+    paragraphs.forEach((p, idx) => {
+      const wrapped = wrapParagraphToLines(mctx, p, maxWidth);
+      allLines = allLines.concat(wrapped);
+    });
+
+    const linesPerPage = Math.floor((HW_PAGE_H - HW_MARGIN_TOP - HW_MARGIN_BOTTOM) / HW_LINE_HEIGHT);
+    const pages = [];
+    for (let i = 0; i < allLines.length; i += linesPerPage) {
+      const pageLines = allLines.slice(i, i + linesPerPage);
+      const canvas = document.createElement('canvas');
+      canvas.width = HW_PAGE_W;
+      canvas.height = HW_PAGE_H;
+      const ctx = canvas.getContext('2d');
+      drawPaperBackground(ctx, paperStyle, HW_PAGE_W, HW_PAGE_H);
+      ctx.font = `${HW_FONT_SIZE}px 'Caveat', cursive`;
+      ctx.fillStyle = inkColor;
+      ctx.textBaseline = 'alphabetic';
+      pageLines.forEach((line, li) => {
+        const y = HW_MARGIN_TOP + li * HW_LINE_HEIGHT;
+        const jitterY = (Math.random() - 0.5) * 2.5;
+        const rotation = (Math.random() - 0.5) * 0.012;
+        ctx.save();
+        ctx.translate(HW_MARGIN_LEFT, y + jitterY);
+        ctx.rotate(rotation);
+        ctx.fillText(line, 0, 0);
+        ctx.restore();
+      });
+      pages.push(canvas);
+    }
+    return pages.length ? pages : [(() => {
+      const canvas = document.createElement('canvas');
+      canvas.width = HW_PAGE_W; canvas.height = HW_PAGE_H;
+      drawPaperBackground(canvas.getContext('2d'), paperStyle, HW_PAGE_W, HW_PAGE_H);
+      return canvas;
+    })()];
+  }
+
+  function renderCurrentHwPage() {
+    const page = hwState.pages[hwState.currentPage];
+    if (!page) return;
+    hwCanvas.width = page.width;
+    hwCanvas.height = page.height;
+    hwCanvas.getContext('2d').drawImage(page, 0, 0);
+    hwPageNav.style.display = hwState.pages.length > 1 ? 'flex' : 'none';
+    hwPageLabel.textContent = `Page ${hwState.currentPage + 1} of ${hwState.pages.length}`;
+  }
+
+  function regenerateHwPages() {
+    if (!resultText.value.trim()) return;
+    hwState.pages = generateHandwrittenPages(resultText.value, hwInkColor.value, hwPaperStyle.value);
+    if (hwState.currentPage >= hwState.pages.length) hwState.currentPage = 0;
+    renderCurrentHwPage();
+  }
+
+  handwriteBtn.addEventListener('click', async () => {
+    if (!resultText.value.trim()) {
+      showToast('Extract some text first', 'error');
+      return;
+    }
+    // Ensure the handwriting font is loaded before measuring/drawing text,
+    // otherwise the first render can fall back to a generic font.
+    try {
+      await document.fonts.load(`${HW_FONT_SIZE}px 'Caveat'`);
+    } catch (e) { /* font API not critical — proceeds with fallback font if it fails */ }
+    hwState.currentPage = 0;
+    regenerateHwPages();
+    hwModal.classList.add('visible');
+  });
+  hwCloseBtn.addEventListener('click', () => hwModal.classList.remove('visible'));
+  hwModal.addEventListener('click', e => { if (e.target === hwModal) hwModal.classList.remove('visible'); });
+  hwInkColor.addEventListener('change', regenerateHwPages);
+  hwPaperStyle.addEventListener('change', regenerateHwPages);
+  hwPrevBtn.addEventListener('click', () => {
+    if (hwState.currentPage > 0) { hwState.currentPage--; renderCurrentHwPage(); }
+  });
+  hwNextBtn.addEventListener('click', () => {
+    if (hwState.currentPage < hwState.pages.length - 1) { hwState.currentPage++; renderCurrentHwPage(); }
+  });
+  hwDownloadPngBtn.addEventListener('click', () => {
+    const page = hwState.pages[hwState.currentPage];
+    if (!page) return;
+    const url = page.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = baseFilename() + `-handwritten-page${hwState.currentPage + 1}.png`;
+    a.click();
+    showToast('Page downloaded!');
+  });
+  hwDownloadPdfBtn.addEventListener('click', () => {
+    if (!hwState.pages.length) return;
+    try {
+      const { jsPDF } = window.jspdf;
+      const scale = 595 / HW_PAGE_W;
+      const pdfW = 595;
+      const pdfH = HW_PAGE_H * scale;
+      const doc = new jsPDF({ unit: 'pt', format: [pdfW, pdfH] });
+      hwState.pages.forEach((page, i) => {
+        if (i > 0) doc.addPage([pdfW, pdfH]);
+        doc.addImage(page.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pdfW, pdfH);
+      });
+      doc.save(baseFilename() + '-handwritten.pdf');
+      showToast('Handwritten PDF downloaded!');
+    } catch (err) {
+      showError('Could not build the handwritten PDF.', err);
     }
   });
 
