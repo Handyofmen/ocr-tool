@@ -6,11 +6,12 @@
 //    engine + chosen language model (~2-15MB depending on language); every
 //    use after that works fully offline, including on airplane mode.
 
-const SHELL_CACHE = 'ocr-tool-shell-v2';
-const RUNTIME_CACHE = 'ocr-tool-runtime-v2';
+const SHELL_CACHE = 'ocr-tool-shell-v4';
+const RUNTIME_CACHE = 'ocr-tool-runtime-v4';
 
 const SHELL_FILES = [
-  './ocr-tool.html',
+  './',
+  './index.html',
   './manifest.json',
   './icon-192.png',
   './icon-512.png'
@@ -19,9 +20,18 @@ const SHELL_FILES = [
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(SHELL_CACHE)
-      .then(cache => cache.addAll(SHELL_FILES))
+      .then(cache =>
+        // Cache each file independently instead of using addAll — addAll is
+        // all-or-nothing, so if even one file 404s, NONE of the shell gets
+        // cached, silently breaking offline mode. This way, one bad file
+        // can't take the rest down with it.
+        Promise.allSettled(
+          SHELL_FILES.map(file =>
+            cache.add(file).catch(err => console.warn('Could not precache', file, err))
+          )
+        )
+      )
       .then(() => self.skipWaiting())
-      .catch(err => console.warn('Shell precache failed (some files may be missing):', err))
   );
 });
 
