@@ -1,1 +1,26 @@
-
+{
+  "id": "/ocr-tool/",
+  "name": "OCR & PDF to Text",
+  "short_name": "OCR Tool",
+  "description": "Extract text from images and PDFs, entirely offline after first install.",
+  "start_url": "/ocr-tool/",
+  "scope": "/ocr-tool/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/ocr-tool/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/ocr-tool/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
